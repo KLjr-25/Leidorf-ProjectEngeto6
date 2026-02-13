@@ -1,0 +1,2 @@
+BASE_URL=https://engeto.cz
+BROWSER_HEADLESS=False
