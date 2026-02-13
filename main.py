@@ -1,3 +1,10 @@
+"""
+main.py: Šestý projekt Tři automatizované testy do Engeto Online Python Akademie
+author: Květoslav Leidorf
+email: k.leidorf@gmail.com
+discord: kvetos_95684
+"""
+
 import os
 import re
 import sys
@@ -82,3 +89,4 @@ if __name__ == "__main__":
     print(f"--- Spouštím Projekt 6 (Playwright testy) ---")
     args = ["-v", "--headed", __file__]
     sys.exit(pytest.main(args))
+
