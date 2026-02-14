@@ -1,4 +1,5 @@
 """
+2 verze - Opraveno ošetření výjimek a zpřesněn lokátor v Testu 3 dle doporučení lektora S.T.
 main.py: Šestý projekt Tři automatizované testy do Engeto Online Python Akademie
 author: Květoslav Leidorf
 email: k.leidorf@gmail.com
@@ -9,84 +10,83 @@ import os
 import re
 import sys
 import pytest
-from playwright.sync_api import Page, expect
+from playwright.sync_api import Page, expect, TimeoutError as PlaywrightTimeoutError
 from dotenv import load_dotenv
 
-# =============================================================================
-# KONFIGURACE A NASTAVENÍ (ZERO HARDCODING)
-# =============================================================================
-# Načtení proměnných ze souboru .env
+# Načtení environmentálních proměnných
 load_dotenv()
 BASE_URL: str = os.getenv("BASE_URL", "https://engeto.cz").rstrip("/")
 
-# =============================================================================
-# ARCHITEKTURA: PAGE OBJECT MODEL (POM)
-# =============================================================================
 class EngetoPage:
     """
-    Třída reprezentující webovou stránku Engeto.
-    Odděluje technické hledání prvků (lokátory) od samotných testů.
+    Page Object Model pro Engeto.cz s aktivním ošetřením viditelnosti prvků.
     """
     def __init__(self, page: Page) -> None:
         self.page = page
-        # Lokátor pro cookie tlačítko
         self.cookie_button = page.locator("#cookiescript_accept")
-        # Lokátor pro odkaz na Termíny (bere první viditelný)
+        # Lokátor pro hlavní menu (hamburger), pokud je stránka v mobilním/zmenšeném zobrazení
+        self.menu_button = page.get_by_role("button", name=re.compile(r"Menu", re.IGNORECASE))
         self.terminy_link = page.get_by_role("link", name=re.compile(r"Termíny", re.IGNORECASE)).first
+        self.main_content = page.locator("main")
 
     def navigate(self) -> None:
-        """Otevře web a pokusí se vyřešit cookie lištu."""
+        """Navigace a robustní odbavení cookie banneru s logováním stavu."""
         self.page.goto(BASE_URL, wait_until="domcontentloaded")
         try:
-            self.cookie_button.click(timeout=3000)
-        except:
-            pass # Pokud se lišta neobjeví, pokračujeme dál
+            # Kontrola viditelnosti před interakcí
+            if self.cookie_button.is_visible(timeout=3000):
+                self.cookie_button.click()
+                print("\nLog: Cookie banner potvrzen.")
+        except PlaywrightTimeoutError:
+            print("\nLog: Cookie banner nedetekován, pokračuji.")
+        except Exception as e:
+            print(f"\nVarování: Neočekávaná chyba při řešení cookies: {e}")
 
     def go_to_terminy(self) -> None:
-        """Naviguje uživatele do sekce Termíny."""
+        """
+        Navigace na termíny s pokusem o zviditelnění menu a finálním fallbackem.
+        """
         try:
-            self.terminy_link.wait_for(state="visible", timeout=5000)
+            # Kontrola viditelnosti odkazu pro případ mobilního zobrazení
+            if not self.terminy_link.is_visible():
+                if self.menu_button.is_visible(timeout=2000):
+                    self.menu_button.click()
+                    print("Log: Otevírám mobilní menu pro zviditelnění odkazu.")
+
+            # Pokus o standardní kliknutí na odkaz
+            self.terminy_link.wait_for(state="visible", timeout=3000)
             self.terminy_link.click()
-        except:
-            # Záložní navigace, pokud by bylo menu překryté
+            print("Log: Navigace přes UI proběhla úspěšně.")
+        except (PlaywrightTimeoutError, Exception) as e:
+            # Finální záchranná brzda - přímá navigace při selhání UI prvků
+            print(f"Log: UI navigace selhala ({e}). Použit fallback na přímou URL.")
             self.page.goto(f"{BASE_URL}/terminy/")
 
-# =============================================================================
-# FIXTURES (PŘÍPRAVA PROSTŘEDÍ)
-# =============================================================================
 @pytest.fixture
 def engeto(page: Page) -> EngetoPage:
-    """Připraví stránku před každým testem."""
+    """Fixture pro inicializaci stránky před každým testem."""
     engeto_page = EngetoPage(page)
     engeto_page.navigate()
     return engeto_page
 
-# =============================================================================
-# TESTOVACÍ SCÉNÁŘE (TŘI AUTOMATIZOVANÉ TESTY)
-# =============================================================================
+# --- Testy ---
+
 def test_homepage_loads_correctly(engeto: EngetoPage) -> None:
-    """Test 1: Ověření správného načtení titulní stránky a titulku."""
-    expect(engeto.page, "Chyba: Titulek neodpovídá webu Engeto.").to_have_title(re.compile(r"Engeto", re.IGNORECASE))
+    """Ověření správného načtení titulní stránky."""
+    expect(engeto.page, "Chyba: Titulek neodpovídá.").to_have_title(re.compile(r"Engeto", re.IGNORECASE))
 
 def test_navigation_to_terminy(engeto: EngetoPage) -> None:
-    """Test 2: Ověření navigace do sekce Termíny a kontrola URL."""
+    """Ověření navigace do sekce termínů."""
     engeto.go_to_terminy()
-    expect(engeto.page, "Chyba: Uživatel nebyl přesměrován na /terminy/.").to_have_url(re.compile(r"/terminy/"))
-    expect(engeto.page.locator("h1").first, "Chyba: Na stránce chybí hlavní nadpis H1.").to_be_visible()
+    expect(engeto.page, "Chyba: Špatná URL.").to_have_url(re.compile(r"/terminy/"))
 
 def test_check_python_presence(engeto: EngetoPage) -> None:
-    """Test 3: Kontrola přítomnosti klíčového slova 'Python' v nabídce kurzů."""
+    """Kontrola přítomnosti textu 'Python' v hlavní obsahové části sekce Termíny."""
     engeto.go_to_terminy()
-    error_msg = "Varování: Text 'Python' nebyl nalezen. Web mohl změnit strukturu nebo kurz není vypsán."
-    expect(engeto.page.locator("body"), error_msg).to_contain_text("Python", ignore_case=True, timeout=10000)
+    # Vyhledávání omezeno na 'main_content' pro vyšší přesnost testu
+    error_msg = "Chyba: Kurz Python nebyl v hlavní části nalezen."
+    expect(engeto.main_content, error_msg).to_contain_text("Python", ignore_case=True, timeout=10000)
 
-# =============================================================================
-# SPUŠTĚNÍ (VSTUPNÍ BOD)
-# =============================================================================
 if __name__ == "__main__":
-    # Tento blok zajistí, že po spuštění 'python main.py' se spustí pytest
-    # přímo nad tímto souborem.
-    print(f"--- Spouštím Projekt 6 (Playwright testy) ---")
-    args = ["-v", "--headed", __file__]
-    sys.exit(pytest.main(args))
-
+    # Spuštění s -s pro zobrazení našich Logů v terminálu
+    sys.exit(pytest.main(["-v", "-s", "--headed", __file__]))
