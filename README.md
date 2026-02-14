@@ -12,25 +12,48 @@ Tento projekt obsahuje sadu tří automatizovaných testů pro webovou stránku 
 - **Page Object Model (POM):** Logika selektorů je oddělena od samotných testovacích scénářů uvnitř třídy.
 - **Zero Hardcoding:** URL a konfigurační data jsou načítána externě ze souboru `.env`.
 - **Type Hinting:** Funkce a metody obsahují definice typů pro vyšší stabilitu kódu.
-- **Robustnost:** Implementováno ošetření dynamických prvků a srozumitelné české chybové hlášky.
+- **Robustnost:** Implementováno ošetření dynamických prvků (cookie banner, mobilní menu) a srozumitelné české chybové hlášky.
+
+## Aktualizace a stabilizace (Reflexe technické revize)
+Na základě zpětné vazby byla posílena stabilita a přesnost testů:
+- **Error Handling:** Odstraněno tiché potlačování výjimek. Nyní jsou zachycovány specifické chyby (`PlaywrightTimeoutError`) a stavy jsou logovány do konzole.
+- **Zpřesnění lokátorů:** Test 3 byl upraven tak, aby vyhledával klíčová slova pouze v hlavní obsahové části (`main`), čímž se předchází falešně pozitivním výsledkům z menu či patičky.
+- **Anti-Flaky Navigace:** Posílena logika navigace s inteligentním ošetřením viditelnosti prvků (hamburger menu) a automatickým fallbackem na přímou URL.
 
 ## Instalace
 
-1. Vytvořte virtuální prostředí:
-    python -m venv venv
-    .\venv\Scripts\Activate.ps1
+1. **Vytvořte virtuální prostředí:**
+```powershell
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+```
 
-2. Nainstalujte závislosti:
-    pip install -r requirements.txt
+2. **Nainstalujte závislosti:**
+```powershell
+pip install -r requirements.txt
+```
 
-3. Nainstalujte prohlížeč Playwright:
-    playwright install chromium
+3. **Nainstalujte prohlížeč Playwright:**
+```powershell
+playwright install chromium
+```
 
 ## Spuštění
-Projekt lze spustit jako běžný Python skript, který automaticky vyvolá testovací framework:
-    python main.py
+
+Projekt lze spustit dvěma způsoby:
+
+1. **Automatické spuštění (včetně logování a UI):**
+   ```powershell
+   python main.py
+   ```
+
+2. **Manuální spuštění přes Pytest (pro detailnější výpis):**
+   ```powershell
+   pytest main.py -v -s --headed
+   ```
+   *Poznámka: Parametr `-s` je důležitý pro zobrazení logů o průběhu testu (cookies, navigace).*
 
 ## Struktura projektu
-- main.py: Hlavní a jediný soubor obsahující veškerou testovací logiku a spouštěč.
-- .env: Konfigurační soubor pro uložení globálních proměnných (BASE_URL).
-- requirements.txt: Seznam knihoven potřebných pro běh projektu.
+- **main.py:** Hlavní a jediný soubor obsahující veškerou testovací logiku a spouštěč.
+- **.env:** Konfigurační soubor pro uložení globálních proměnných (BASE_URL).
+- **requirements.txt:** Seznam knihoven potřebných pro běh projektu.
